@@ -1,0 +1,76 @@
+{
+  "name": "claude-viewer",
+  "version": "1.0.0",
+  "description": "A beautiful viewer for Claude Code conversation logs",
+  "author": "Eran",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "claude",
+    "anthropic",
+    "conversation",
+    "viewer",
+    "jsonl"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eran-broder/claude-viewer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/eran-broder/claude-viewer/issues"
+  },
+  "homepage": "https://github.com/eran-broder/claude-viewer#readme",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "tsx watch server/index.ts",
+    "dev:client": "vite",
+    "build": "tsc -b && vite build",
+    "start": "NODE_ENV=production node --import tsx server/index.ts",
+    "start:win": "set NODE_ENV=production && node --import tsx server/index.ts",
+    "lint": "eslint .",
+    "preview": "npm run build && npm run start"
+  },
+  "dependencies": {
+    "@radix-ui/react-collapsible": "^1.1.12",
+    "@radix-ui/react-scroll-area": "^1.2.10",
+    "@radix-ui/react-tooltip": "^1.2.8",
+    "@tanstack/react-virtual": "^3.13.18",
+    "autoprefixer": "^10.4.24",
+    "chokidar": "^5.0.0",
+    "clsx": "^2.1.1",
+    "concurrently": "^9.2.1",
+    "cors": "^2.8.6",
+    "date-fns": "^4.1.0",
+    "express": "^5.2.1",
+    "framer-motion": "^12.31.3",
+    "lucide-react": "^0.563.0",
+    "postcss": "^8.5.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^16.1.0",
+    "tailwind-merge": "^3.4.0",
+    "tailwindcss": "^3.4.19",
+    "ws": "^8.19.0",
+    "zustand": "^5.0.11"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^5.1.1",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "tsx": "^4.21.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.4",
+    "vite": "^7.2.4"
+  }
+}
