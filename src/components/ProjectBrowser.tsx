@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FolderOpen,
@@ -9,16 +9,20 @@ import {
   Loader,
   PanelLeftClose,
   PanelLeft,
+  Search,
+  X,
 } from 'lucide-react';
 import { cn, formatDate } from '../lib/utils';
 import {
   fetchProjects,
   fetchConversations,
   fetchConversationContent,
+  searchConversations,
   connectWebSocket,
   type ProjectInfo,
   type ConversationInfo,
   type WsMessage,
+  type SearchResult,
 } from '../lib/api';
 
 interface ProjectBrowserProps {
@@ -37,6 +41,13 @@ export function ProjectBrowser({ onSelectConversation, selectedConversationId, s
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Global search state
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   // Load projects on mount
   useEffect(() => {
     loadProjects();
@@ -51,6 +62,33 @@ export function ProjectBrowser({ onSelectConversation, selectedConversationId, s
       loadConversations(selectedProjectId);
     }
   }, [selectedProjectId]);
+
+  // Global search with debounce
+  useEffect(() => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+
+    if (globalSearch.length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    searchTimeout.current = setTimeout(async () => {
+      try {
+        const results = await searchConversations(globalSearch);
+        setSearchResults(results);
+      } catch (err) {
+        console.error('Search failed:', err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    };
+  }, [globalSearch]);
 
   const loadProjects = async () => {
     setIsLoading(true);
@@ -109,6 +147,16 @@ export function ProjectBrowser({ onSelectConversation, selectedConversationId, s
     try {
       const content = await fetchConversationContent(conv.projectId, conv.id);
       onSelectConversation(conv.projectId, conv.id, content);
+    } catch (err) {
+      console.error('Failed to load conversation:', err);
+    }
+  };
+
+  const handleSelectSearchResult = async (result: SearchResult) => {
+    try {
+      const content = await fetchConversationContent(result.projectId, result.conversationId);
+      onSelectConversation(result.projectId, result.conversationId, content);
+      setGlobalSearch(''); // Clear search after selection
     } catch (err) {
       console.error('Failed to load conversation:', err);
     }
@@ -175,8 +223,67 @@ export function ProjectBrowser({ onSelectConversation, selectedConversationId, s
         </div>
       </div>
 
-      {/* Project List */}
+      {/* Global Search */}
+      <div className="p-2 border-b border-border">
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={globalSearch}
+            onChange={(e) => setGlobalSearch(e.target.value)}
+            placeholder="Search all conversations..."
+            className="w-full pl-8 pr-8 py-1.5 bg-bg-tertiary border border-border rounded text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-blue"
+          />
+          {globalSearch && (
+            <button
+              onClick={() => setGlobalSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Search Results or Project List */}
       <div className="flex-1 overflow-y-auto">
+        {globalSearch.length >= 2 ? (
+          // Search Results
+          <div className="p-2">
+            {isSearching ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader className="w-5 h-5 text-text-muted animate-spin" />
+              </div>
+            ) : searchResults.length === 0 ? (
+              <div className="text-sm text-text-muted text-center py-4">
+                No results found
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <div className="text-xs text-text-muted px-2 py-1">
+                  {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
+                </div>
+                {searchResults.map((result, idx) => (
+                  <button
+                    key={`${result.projectId}-${result.conversationId}-${idx}`}
+                    onClick={() => handleSelectSearchResult(result)}
+                    className="w-full text-left p-2 rounded hover:bg-bg-elevated transition-colors"
+                  >
+                    <div className="text-xs text-accent-purple truncate">
+                      {result.projectId.split('-').pop()}
+                    </div>
+                    <div className="text-sm text-text-primary line-clamp-2">
+                      {result.snippet}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          // Project List
+          <>
         {projects.map((project) => (
           <div key={project.id}>
             {/* Project Header */}
@@ -258,6 +365,8 @@ export function ProjectBrowser({ onSelectConversation, selectedConversationId, s
             </AnimatePresence>
           </div>
         ))}
+          </>
+        )}
       </div>
     </div>
   );

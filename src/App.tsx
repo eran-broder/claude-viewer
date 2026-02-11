@@ -49,7 +49,7 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col bg-bg-primary">
-      {conversation && <Header />}
+      {conversation && <Header projectId={selectedProjectId} conversationId={selectedConversationId} />}
       <div className="flex-1 flex overflow-hidden">
         <ProjectBrowser
           onSelectConversation={handleSelectConversation}

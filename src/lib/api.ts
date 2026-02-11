@@ -50,6 +50,33 @@ export async function fetchConversations(projectId: string): Promise<Conversatio
   return data.conversations;
 }
 
+// Search across all conversations
+export interface SearchResult {
+  projectId: string;
+  conversationId: string;
+  snippet: string;
+  matchIndex: number;
+  type: string;
+}
+
+export async function searchConversations(query: string): Promise<SearchResult[]> {
+  if (query.length < 2) return [];
+  const response = await fetch(`${API_BASE}/conversations/search?q=${encodeURIComponent(query)}`);
+  if (!response.ok) throw new Error('Search failed');
+  const data = await response.json();
+  return data.results;
+}
+
+// Continue conversation in Claude CLI
+export async function continueInClaude(projectId: string, conversationId?: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/continue`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ conversationId }),
+  });
+  if (!response.ok) throw new Error('Failed to open Claude CLI');
+}
+
 // Fetch conversation content
 export async function fetchConversationContent(projectId: string, conversationId: string): Promise<string> {
   const response = await fetch(

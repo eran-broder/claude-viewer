@@ -77,6 +77,115 @@ conversationsRouter.get('/', async (req, res) => {
   }
 });
 
+// GET /api/conversations/search?q=xxx - Search across all conversations
+// NOTE: This must be defined BEFORE /:id to avoid being matched as id="search"
+conversationsRouter.get('/search', async (req, res) => {
+  try {
+    const { q } = req.query;
+
+    if (!q || typeof q !== 'string' || q.length < 2) {
+      return res.json({ results: [] });
+    }
+
+    const query = q.toLowerCase();
+    const projectsDir = getProjectsDir();
+    const projects = await readdir(projectsDir);
+    const results: SearchResult[] = [];
+    const MAX_RESULTS = 50;
+
+    for (const projectId of projects) {
+      if (results.length >= MAX_RESULTS) break;
+
+      const projectPath = join(projectsDir, projectId);
+      const projectStat = await stat(projectPath).catch(() => null);
+      if (!projectStat?.isDirectory()) continue;
+
+      const files = await readdir(projectPath).catch(() => []);
+      const conversationFiles = files.filter(isConversationFile);
+
+      for (const file of conversationFiles) {
+        if (results.length >= MAX_RESULTS) break;
+
+        const filePath = join(projectPath, file);
+        const conversationId = file.replace('.jsonl', '');
+
+        try {
+          const content = await readFile(filePath, 'utf-8');
+          const lines = content.split('\n').filter(Boolean);
+
+          for (const line of lines) {
+            if (results.length >= MAX_RESULTS) break;
+
+            try {
+              const entry = JSON.parse(line);
+              const text = extractText(entry);
+              const lowerText = text.toLowerCase();
+              const idx = lowerText.indexOf(query);
+
+              if (idx !== -1) {
+                const start = Math.max(0, idx - 40);
+                const end = Math.min(text.length, idx + query.length + 40);
+                const snippet = (start > 0 ? '...' : '') +
+                  text.slice(start, end) +
+                  (end < text.length ? '...' : '');
+
+                results.push({
+                  projectId,
+                  conversationId,
+                  snippet,
+                  matchIndex: idx,
+                  type: entry.type || 'unknown',
+                });
+                break;
+              }
+            } catch {
+              continue;
+            }
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+
+    res.json({ results });
+  } catch (err) {
+    console.error('Search error:', err);
+    res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+interface SearchResult {
+  projectId: string;
+  conversationId: string;
+  snippet: string;
+  matchIndex: number;
+  type: string;
+}
+
+function extractText(entry: Record<string, unknown>): string {
+  const parts: string[] = [];
+  if (entry.message && typeof entry.message === 'object') {
+    const msg = entry.message as Record<string, unknown>;
+    if (typeof msg.content === 'string') {
+      parts.push(msg.content);
+    } else if (Array.isArray(msg.content)) {
+      for (const block of msg.content) {
+        if (block && typeof block === 'object') {
+          const b = block as Record<string, unknown>;
+          if (b.type === 'text' && typeof b.text === 'string') {
+            parts.push(b.text);
+          }
+          if (b.type === 'thinking' && typeof b.thinking === 'string') {
+            parts.push(b.thinking);
+          }
+        }
+      }
+    }
+  }
+  return parts.join(' ');
+}
+
 // GET /api/conversations/:id?projectId=xxx - Get full conversation content
 conversationsRouter.get('/:id', async (req, res) => {
   try {

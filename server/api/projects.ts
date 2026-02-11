@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { readdir, stat } from 'fs/promises';
 import { join } from 'path';
+import { spawn } from 'child_process';
 import {
   getProjectsDir,
   folderNameToPath,
@@ -89,5 +90,50 @@ projectsRouter.get('/:projectId', async (req, res) => {
   } catch (err) {
     console.error('Error getting project:', err);
     res.status(404).json({ error: 'Project not found' });
+  }
+});
+
+// POST /api/projects/:projectId/continue - Open Claude CLI to continue conversation
+projectsRouter.post('/:projectId/continue', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { conversationId } = req.body;
+
+    // Get the actual project path from the project ID
+    const projectPath = folderNameToPath(projectId);
+
+    // Build the claude command
+    const args = ['--permission-mode', 'bypassPermissions', '-c'];
+    if (conversationId) {
+      args.push('-r', conversationId);
+    }
+
+    // Spawn in a new terminal window
+    const isWindows = process.platform === 'win32';
+
+    if (isWindows) {
+      // On Windows, open a new cmd window
+      spawn('cmd', ['/c', 'start', 'cmd', '/k', 'claude', ...args], {
+        cwd: projectPath,
+        detached: true,
+        stdio: 'ignore',
+      }).unref();
+    } else {
+      // On macOS/Linux, try to open a terminal
+      const terminal = process.platform === 'darwin'
+        ? ['open', '-a', 'Terminal', projectPath]
+        : ['x-terminal-emulator', '-e'];
+
+      spawn(terminal[0], [...terminal.slice(1), 'claude', ...args], {
+        cwd: projectPath,
+        detached: true,
+        stdio: 'ignore',
+      }).unref();
+    }
+
+    res.json({ success: true, message: 'Claude CLI opened' });
+  } catch (err) {
+    console.error('Error opening Claude CLI:', err);
+    res.status(500).json({ error: 'Failed to open Claude CLI' });
   }
 });

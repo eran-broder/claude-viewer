@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   FileJson,
@@ -17,12 +18,20 @@ import {
   User,
   Bot,
   Wrench,
+  Terminal,
+  Loader,
 } from 'lucide-react';
 import { cn, formatTokens, formatDuration, estimateCost } from '../lib/utils';
 import { useConversationStore } from '../store/conversation-store';
 import { ExportButton } from './ExportButton';
+import { continueInClaude } from '../lib/api';
 
-export function Header() {
+interface HeaderProps {
+  projectId: string | null;
+  conversationId: string | null;
+}
+
+export function Header({ projectId, conversationId }: HeaderProps) {
   const {
     conversation,
     fileName,
@@ -41,6 +50,20 @@ export function Header() {
     messageFilter,
     setMessageFilter,
   } = useConversationStore();
+
+  const [isContinuing, setIsContinuing] = useState(false);
+
+  const handleContinueInClaude = async () => {
+    if (!projectId) return;
+    setIsContinuing(true);
+    try {
+      await continueInClaude(projectId, conversationId || undefined);
+    } catch (err) {
+      console.error('Failed to open Claude CLI:', err);
+    } finally {
+      setIsContinuing(false);
+    }
+  };
 
   if (!conversation) return null;
 
@@ -178,6 +201,27 @@ export function Header() {
           >
             <BarChart3 className="w-4 h-4" />
           </button>
+
+          {/* Continue in Claude button */}
+          {projectId && (
+            <button
+              onClick={handleContinueInClaude}
+              disabled={isContinuing}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
+                'bg-accent-green/20 text-accent-green hover:bg-accent-green/30',
+                isContinuing && 'opacity-50 cursor-not-allowed'
+              )}
+              title="Continue conversation in Claude CLI"
+            >
+              {isContinuing ? (
+                <Loader className="w-4 h-4 animate-spin" />
+              ) : (
+                <Terminal className="w-4 h-4" />
+              )}
+              Continue
+            </button>
+          )}
 
           {/* Export button */}
           <ExportButton />
