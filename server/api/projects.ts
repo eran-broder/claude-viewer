@@ -103,9 +103,13 @@ projectsRouter.post('/:projectId/continue', async (req, res) => {
     const projectPath = folderNameToPath(projectId);
 
     // Build the claude command
-    const args = ['--permission-mode', 'bypassPermissions', '-c'];
+    // --resume <sessionId> resumes a specific conversation
+    // --continue resumes the most recent in the directory
+    const args = ['--permission-mode', 'bypassPermissions'];
     if (conversationId) {
-      args.push('-r', conversationId);
+      args.push('--resume', conversationId);
+    } else {
+      args.push('--continue');
     }
 
     // Spawn in a new terminal window
