@@ -2,26 +2,23 @@ import { Router } from 'express';
 import { readdir, stat, readFile } from 'fs/promises';
 import { join } from 'path';
 import {
+  ConversationInfoSchema,
+  ConversationsResponseSchema,
+  SearchResultSchema,
+  SearchResponseSchema,
+  ConversationContentResponseSchema,
+  type ConversationInfo,
+} from '../../shared/schemas';
+import {
   getProjectsDir,
   isConversationFile,
   getFirstUserMessage,
   getConversationMetadata,
   formatFileSize,
 } from '../utils';
+import { getSearchIndex } from '../services/search-index';
 
 export const conversationsRouter = Router();
-
-export interface ConversationInfo {
-  id: string;
-  projectId: string;
-  firstMessage: string | null;
-  messageCount: number;
-  timestamp: string | null;
-  lastModified: string;
-  size: string;
-  sizeBytes: number;
-  model: string | null;
-}
 
 // GET /api/conversations?projectId=xxx - List conversations for a project
 conversationsRouter.get('/', async (req, res) => {
@@ -49,7 +46,7 @@ conversationsRouter.get('/', async (req, res) => {
           getConversationMetadata(filePath),
         ]);
 
-        conversations.push({
+        const conversation: ConversationInfo = {
           id,
           projectId,
           firstMessage,
@@ -59,7 +56,11 @@ conversationsRouter.get('/', async (req, res) => {
           size: formatFileSize(fileStats.size),
           sizeBytes: fileStats.size,
           model: metadata.model,
-        });
+        };
+
+        // Validate with Zod
+        const validated = ConversationInfoSchema.parse(conversation);
+        conversations.push(validated);
       } catch (err) {
         console.error(`Error reading conversation ${file}:`, err);
       }
@@ -70,121 +71,75 @@ conversationsRouter.get('/', async (req, res) => {
       new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
     );
 
-    res.json({ conversations });
+    // Validate response
+    const response = ConversationsResponseSchema.parse({ conversations });
+    res.json(response);
   } catch (err) {
     console.error('Error listing conversations:', err);
     res.status(500).json({ error: 'Failed to list conversations' });
   }
 });
 
-// GET /api/conversations/search?q=xxx - Search across all conversations
-// NOTE: This must be defined BEFORE /:id to avoid being matched as id="search"
+// GET /api/conversations/search?q=xxx - Search across all conversations (indexed)
 conversationsRouter.get('/search', async (req, res) => {
   try {
     const { q } = req.query;
 
     if (!q || typeof q !== 'string' || q.length < 2) {
-      return res.json({ results: [] });
+      return res.json(SearchResponseSchema.parse({ results: [] }));
     }
 
-    const query = q.toLowerCase();
-    const projectsDir = getProjectsDir();
-    const projects = await readdir(projectsDir);
-    const results: SearchResult[] = [];
-    const MAX_RESULTS = 50;
+    const searchIndex = getSearchIndex();
 
-    for (const projectId of projects) {
-      if (results.length >= MAX_RESULTS) break;
+    // Ensure index is up to date (checks last_modified dates)
+    await searchIndex.ensureIndexed();
 
-      const projectPath = join(projectsDir, projectId);
-      const projectStat = await stat(projectPath).catch(() => null);
-      if (!projectStat?.isDirectory()) continue;
+    // Use indexed search
+    const rawResults = await searchIndex.search(q, 50);
 
-      const files = await readdir(projectPath).catch(() => []);
-      const conversationFiles = files.filter(isConversationFile);
+    // Validate each result with Zod
+    const results = rawResults.map(r => SearchResultSchema.parse(r));
 
-      for (const file of conversationFiles) {
-        if (results.length >= MAX_RESULTS) break;
-
-        const filePath = join(projectPath, file);
-        const conversationId = file.replace('.jsonl', '');
-
-        try {
-          const content = await readFile(filePath, 'utf-8');
-          const lines = content.split('\n').filter(Boolean);
-
-          for (const line of lines) {
-            if (results.length >= MAX_RESULTS) break;
-
-            try {
-              const entry = JSON.parse(line);
-              const text = extractText(entry);
-              const lowerText = text.toLowerCase();
-              const idx = lowerText.indexOf(query);
-
-              if (idx !== -1) {
-                const start = Math.max(0, idx - 40);
-                const end = Math.min(text.length, idx + query.length + 40);
-                const snippet = (start > 0 ? '...' : '') +
-                  text.slice(start, end) +
-                  (end < text.length ? '...' : '');
-
-                results.push({
-                  projectId,
-                  conversationId,
-                  snippet,
-                  matchIndex: idx,
-                  type: entry.type || 'unknown',
-                });
-                break;
-              }
-            } catch {
-              continue;
-            }
-          }
-        } catch {
-          continue;
-        }
-      }
-    }
-
-    res.json({ results });
+    // Validate response
+    const response = SearchResponseSchema.parse({ results });
+    res.json(response);
   } catch (err) {
     console.error('Search error:', err);
     res.status(500).json({ error: 'Search failed' });
   }
 });
 
-interface SearchResult {
-  projectId: string;
-  conversationId: string;
-  snippet: string;
-  matchIndex: number;
-  type: string;
-}
-
-function extractText(entry: Record<string, unknown>): string {
-  const parts: string[] = [];
-  if (entry.message && typeof entry.message === 'object') {
-    const msg = entry.message as Record<string, unknown>;
-    if (typeof msg.content === 'string') {
-      parts.push(msg.content);
-    } else if (Array.isArray(msg.content)) {
-      for (const block of msg.content) {
-        if (block && typeof block === 'object') {
-          const b = block as Record<string, unknown>;
-          if (b.type === 'text' && typeof b.text === 'string') {
-            parts.push(b.text);
-          }
-          if (b.type === 'thinking' && typeof b.thinking === 'string') {
-            parts.push(b.thinking);
-          }
-        }
-      }
-    }
+// GET /api/conversations/search/index/status - Get index status
+conversationsRouter.get('/search/index/status', async (_req, res) => {
+  try {
+    const searchIndex = getSearchIndex();
+    const stats = await searchIndex.getStats();
+    res.json({
+      indexed: true,
+      ...stats,
+    });
+  } catch (err) {
+    console.error('Index status error:', err);
+    res.status(500).json({ error: 'Failed to get index status' });
   }
-  return parts.join(' ');
-}
+});
+
+// POST /api/conversations/search/index/rebuild - Force rebuild index
+conversationsRouter.post('/search/index/rebuild', async (_req, res) => {
+  try {
+    const searchIndex = getSearchIndex();
+    await searchIndex.ensureIndexed();
+    const stats = searchIndex.getStats();
+    res.json({
+      success: true,
+      message: 'Index rebuilt',
+      ...stats,
+    });
+  } catch (err) {
+    console.error('Index rebuild error:', err);
+    res.status(500).json({ error: 'Failed to rebuild index' });
+  }
+});
 
 // GET /api/conversations/:id?projectId=xxx - Get full conversation content
 conversationsRouter.get('/:id', async (req, res) => {
@@ -199,7 +154,9 @@ conversationsRouter.get('/:id', async (req, res) => {
     const filePath = join(getProjectsDir(), projectId, `${id}.jsonl`);
     const content = await readFile(filePath, 'utf-8');
 
-    res.json({ content });
+    // Validate response
+    const response = ConversationContentResponseSchema.parse({ content });
+    res.json(response);
   } catch (err) {
     console.error('Error reading conversation:', err);
     res.status(404).json({ error: 'Conversation not found' });
@@ -223,7 +180,7 @@ conversationsRouter.get('/:id/metadata', async (req, res) => {
       getConversationMetadata(filePath),
     ]);
 
-    res.json({
+    const conversation: ConversationInfo = {
       id,
       projectId,
       firstMessage,
@@ -233,7 +190,11 @@ conversationsRouter.get('/:id/metadata', async (req, res) => {
       size: formatFileSize(fileStats.size),
       sizeBytes: fileStats.size,
       model: metadata.model,
-    });
+    };
+
+    // Validate with Zod
+    const response = ConversationInfoSchema.parse(conversation);
+    res.json(response);
   } catch (err) {
     console.error('Error reading conversation metadata:', err);
     res.status(404).json({ error: 'Conversation not found' });

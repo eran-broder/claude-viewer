@@ -18,13 +18,13 @@ npm start        # Linux/macOS
 npm run start:win  # Windows
 ```
 
-Open http://localhost:3000 in your browser.
+Open http://localhost:3001 in your browser.
 
 ## Features
 
 - **Project Browser** - Browse all your Claude Code projects and conversations
 - **Real-time Updates** - WebSocket auto-refreshes when new conversations appear
-- **Search & Filter** - Full-text search with highlighting, filter by user/assistant/tools
+- **Search & Filter** - SQLite-indexed full-text search with highlighting, filter by user/assistant/tools
 - **Syntax Highlighting** - Code blocks with language detection and copy button
 - **Diff Viewer** - Beautiful diff display for Edit tool operations
 - **Thinking Blocks** - Collapsible thinking/reasoning sections
@@ -54,7 +54,7 @@ npm start        # Start server (Linux/macOS)
 npm run start:win  # Start server (Windows)
 ```
 
-Runs on http://localhost:3000 (change with `PORT` env var).
+Runs on http://localhost:3001 (change with `PORT` env var).
 
 ### Development
 
@@ -77,10 +77,12 @@ Frontend: http://localhost:5173 (proxies API to backend)
 
 ## Tech Stack
 
-- **Frontend**: React 19, TypeScript, Tailwind CSS, Framer Motion
+- **Frontend**: React 19, TypeScript, Tailwind CSS
 - **State**: Zustand
 - **Virtualization**: @tanstack/react-virtual
 - **Backend**: Express 5 with WebSocket
+- **API**: Zod schemas (shared between frontend/backend)
+- **Search**: SQLite (sql.js) with automatic indexing
 - **Build**: Vite
 
 ## Project Structure
@@ -93,7 +95,11 @@ claude-viewer/
 │   ├── lib/            # Utilities and parser
 │   ├── store/          # Zustand store
 │   └── types/          # TypeScript types
-├── server/             # Express backend (serves frontend in production)
+├── server/             # Express backend
+│   ├── api/            # API routes
+│   └── services/       # Search indexing service
+├── shared/             # Shared code (frontend + backend)
+│   └── schemas/        # Zod schemas for type-safe API
 ├── dist/               # Built frontend (generated)
 └── package.json
 ```

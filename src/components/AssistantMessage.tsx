@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { Bot, Sparkles } from 'lucide-react';
 import { formatTimestamp, formatTokens } from '../lib/utils';
 import { ThinkingBlock } from './ThinkingBlock';
@@ -16,9 +15,7 @@ export function AssistantMessage({ message, isHighlighted }: AssistantMessagePro
   const usage = message.metadata?.usage;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
+    <div
       className={`flex gap-3 ${isHighlighted ? 'bg-accent-purple/5 -mx-4 px-4 py-2 rounded-lg' : ''}`}
     >
       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent-purple/20 flex items-center justify-center">
@@ -58,6 +55,6 @@ export function AssistantMessage({ message, isHighlighted }: AssistantMessagePro
           })}
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

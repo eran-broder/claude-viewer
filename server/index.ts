@@ -8,10 +8,11 @@ import { projectsRouter } from './api/projects';
 import { conversationsRouter } from './api/conversations';
 import { setupWebSocket } from './ws';
 import { setupWatcher } from './watcher';
+import { getSearchIndex } from './services/search-index';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
-const PORT = process.env.PORT || 3000;
+const DEFAULT_PORT = parseInt(process.env.PORT || '3001', 10);
 const isDev = process.env.NODE_ENV !== 'production';
 
 // Middleware
@@ -41,20 +42,40 @@ if (existsSync(distPath)) {
   });
 }
 
-// Create HTTP server
-const server = createServer(app);
+// Start server with port fallback
+function startServer(port: number, maxAttempts = 10): void {
+  const server = createServer(app);
 
-// Setup WebSocket
-const wss = setupWebSocket(server);
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE' && maxAttempts > 1) {
+      console.log(`⚠️ Port ${port} is in use, trying ${port + 1}...`);
+      startServer(port + 1, maxAttempts - 1);
+    } else {
+      console.error('Server error:', err);
+      process.exit(1);
+    }
+  });
 
-// Setup file watcher
-setupWatcher(wss);
+  server.listen(port, () => {
+    // Setup WebSocket and watcher only after successful port binding
+    const wss = setupWebSocket(server);
+    setupWatcher(wss);
 
-// Start server
-server.listen(PORT, () => {
-  console.log(`🚀 Claude Viewer running at http://localhost:${PORT}`);
-  console.log(`📁 Watching ~/.claude/projects/ for changes`);
-  if (isDev) {
-    console.log(`🔧 Development mode - CORS enabled`);
-  }
-});
+    console.log(`🚀 Claude Viewer running at http://localhost:${port}`);
+    console.log(`📁 Watching ~/.claude/projects/ for changes`);
+    if (isDev) {
+      console.log(`🔧 Development mode - CORS enabled`);
+    }
+
+    // Initialize search index in background
+    console.log(`🔍 Building search index...`);
+    getSearchIndex().ensureIndexed().then(async () => {
+      const stats = await getSearchIndex().getStats();
+      console.log(`✅ Search index ready: ${stats.conversationCount} conversations, ${stats.entryCount} entries`);
+    }).catch(err => {
+      console.error(`⚠️ Search index error:`, err);
+    });
+  });
+}
+
+startServer(DEFAULT_PORT);

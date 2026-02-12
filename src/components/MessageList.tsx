@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import { useConversationStore } from '../store/conversation-store';
@@ -6,7 +6,7 @@ import { UserMessage } from './UserMessage';
 import { AssistantMessage } from './AssistantMessage';
 
 export function MessageList() {
-  const { conversation, searchResults, selectedMessageId, setSelectedMessage, messageFilter } =
+  const { conversation, searchResults, selectedMessageId, setSelectedMessage, messageFilter, expandedThinking, expandedTools } =
     useConversationStore();
 
   const parentRef = useRef<HTMLDivElement>(null);
@@ -38,12 +38,20 @@ export function MessageList() {
     return () => el.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Create a stable key that changes when expanded state changes
+  const expandedKey = `${expandedThinking.size}-${expandedTools.size}`;
+
   const virtualizer = useVirtualizer({
     count: messages.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 200, // Estimate average message height
+    estimateSize: useCallback(() => 200, []),
     overscan: 5,
   });
+
+  // Remeasure all items when blocks expand/collapse
+  useEffect(() => {
+    virtualizer.measure();
+  }, [expandedKey, virtualizer]);
 
   // Scroll to selected message
   useEffect(() => {

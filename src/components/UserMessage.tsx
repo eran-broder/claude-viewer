@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { User } from 'lucide-react';
 import { formatTimestamp } from '../lib/utils';
 import { HighlightText } from './HighlightText';
@@ -11,9 +10,7 @@ interface UserMessageProps {
 
 export function UserMessage({ message, isHighlighted }: UserMessageProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
+    <div
       className={`flex gap-3 ${isHighlighted ? 'bg-accent-blue/5 -mx-4 px-4 py-2 rounded-lg' : ''}`}
     >
       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent-blue/20 flex items-center justify-center">
@@ -34,6 +31,6 @@ export function UserMessage({ message, isHighlighted }: UserMessageProps) {
           </p>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

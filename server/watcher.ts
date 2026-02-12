@@ -3,6 +3,7 @@ import { WebSocketServer } from 'ws';
 import { basename, dirname, relative } from 'path';
 import { getProjectsDir, isConversationFile } from './utils';
 import { broadcast } from './ws';
+import { getSearchIndex } from './services/search-index';
 
 export function setupWatcher(wss: WebSocketServer): chokidar.FSWatcher {
   const projectsDir = getProjectsDir();
@@ -27,6 +28,11 @@ export function setupWatcher(wss: WebSocketServer): chokidar.FSWatcher {
 
     console.log(`📄 New conversation: ${projectId}/${conversationId}`);
 
+    // Index the new conversation asynchronously
+    getSearchIndex().indexConversation(projectId, conversationId).catch(err => {
+      console.error(`Failed to index new conversation: ${err}`);
+    });
+
     broadcast({
       type: 'conversation_added',
       projectId,
@@ -42,6 +48,11 @@ export function setupWatcher(wss: WebSocketServer): chokidar.FSWatcher {
     const conversationId = basename(filePath, '.jsonl');
 
     console.log(`📝 Conversation updated: ${projectId}/${conversationId}`);
+
+    // Reindex the modified conversation asynchronously
+    getSearchIndex().indexConversation(projectId, conversationId).catch(err => {
+      console.error(`Failed to reindex conversation: ${err}`);
+    });
 
     broadcast({
       type: 'conversation_updated',

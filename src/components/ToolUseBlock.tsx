@@ -1,4 +1,3 @@
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronRight,
   Terminal,
@@ -53,12 +52,7 @@ export function ToolUseBlock({ block }: ToolUseBlockProps) {
         onClick={() => toggleTool(block.id)}
         className="w-full flex items-center gap-2 p-3 text-left group hover:bg-accent-green/5 transition-colors"
       >
-        <motion.div
-          animate={{ rotate: isExpanded ? 90 : 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          <ChevronRight className="w-4 h-4 text-accent-green" />
-        </motion.div>
+        <ChevronRight className={`w-4 h-4 text-accent-green transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
 
         <span className="text-accent-green">{icon}</span>
         <span className="text-accent-green font-medium">{toolName}</span>
@@ -83,42 +77,32 @@ export function ToolUseBlock({ block }: ToolUseBlockProps) {
       </button>
 
       {/* Expanded content */}
-      <AnimatePresence>
-        {isExpanded && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="px-3 pb-3 space-y-3">
-              {/* Tool input */}
-              <div>
-                <div className="text-text-muted text-xs mb-1 uppercase tracking-wide">
-                  Input
-                </div>
-                <ToolInput toolName={toolName} input={block.toolInput} />
-              </div>
-
-              {/* Tool result */}
-              {block.result && (
-                <div>
-                  <div className="text-text-muted text-xs mb-1 uppercase tracking-wide flex items-center gap-2">
-                    Result
-                    {block.result.isError && (
-                      <span className="text-accent-red flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" /> Error
-                      </span>
-                    )}
-                  </div>
-                  <ToolResult result={block.result} toolName={toolName} />
-                </div>
-              )}
+      {isExpanded && (
+        <div className="px-3 pb-3 space-y-3">
+          {/* Tool input */}
+          <div>
+            <div className="text-text-muted text-xs mb-1 uppercase tracking-wide">
+              Input
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <ToolInput toolName={toolName} input={block.toolInput} />
+          </div>
+
+          {/* Tool result */}
+          {block.result && (
+            <div>
+              <div className="text-text-muted text-xs mb-1 uppercase tracking-wide flex items-center gap-2">
+                Result
+                {block.result.isError && (
+                  <span className="text-accent-red flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> Error
+                  </span>
+                )}
+              </div>
+              <ToolResult result={block.result} toolName={toolName} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

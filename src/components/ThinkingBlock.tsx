@@ -1,4 +1,3 @@
-import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { HighlightText } from './HighlightText';
@@ -22,12 +21,7 @@ export function ThinkingBlock({ block }: ThinkingBlockProps) {
         onClick={() => toggleThinking(block.id)}
         className="w-full flex items-center gap-2 text-left group"
       >
-        <motion.div
-          animate={{ rotate: isExpanded ? 90 : 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          <ChevronRight className="w-4 h-4 text-accent-orange" />
-        </motion.div>
+        <ChevronRight className={`w-4 h-4 text-accent-orange transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
         <Brain className="w-4 h-4 text-accent-orange" />
         <span className="text-accent-orange font-medium">Thinking</span>
         <span className="text-text-muted text-xs">
@@ -41,26 +35,16 @@ export function ThinkingBlock({ block }: ThinkingBlockProps) {
         )}
       </button>
 
-      <AnimatePresence>
-        {isExpanded && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="mt-3 pt-3 border-t border-accent-orange/20">
-              <pre className={cn(
-                'text-sm text-text-secondary whitespace-pre-wrap font-mono',
-                'max-h-96 overflow-y-auto'
-              )}>
-                <HighlightText text={block.content} />
-              </pre>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {isExpanded && (
+        <div className="mt-3 pt-3 border-t border-accent-orange/20">
+          <pre className={cn(
+            'text-sm text-text-secondary whitespace-pre-wrap font-mono',
+            'max-h-96 overflow-y-auto'
+          )}>
+            <HighlightText text={block.content} />
+          </pre>
+        </div>
+      )}
     </div>
   );
 }

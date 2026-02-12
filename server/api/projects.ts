@@ -3,6 +3,13 @@ import { readdir, stat } from 'fs/promises';
 import { join } from 'path';
 import { spawn } from 'child_process';
 import {
+  ProjectInfoSchema,
+  ProjectsResponseSchema,
+  ContinueRequestSchema,
+  ContinueResponseSchema,
+  type ProjectInfo,
+} from '../../shared/schemas';
+import {
   getProjectsDir,
   folderNameToPath,
   getProjectDisplayName,
@@ -11,16 +18,8 @@ import {
 
 export const projectsRouter = Router();
 
-export interface ProjectInfo {
-  id: string;
-  name: string;
-  path: string;
-  conversationCount: number;
-  lastModified: string;
-}
-
 // GET /api/projects - List all projects
-projectsRouter.get('/', async (req, res) => {
+projectsRouter.get('/', async (_req, res) => {
   try {
     const projectsDir = getProjectsDir();
     const entries = await readdir(projectsDir, { withFileTypes: true });
@@ -40,13 +39,17 @@ projectsRouter.get('/', async (req, res) => {
         // Get last modified time
         const stats = await stat(projectPath);
 
-        projects.push({
+        const project: ProjectInfo = {
           id: entry.name,
           name: getProjectDisplayName(entry.name),
           path: folderNameToPath(entry.name),
           conversationCount: conversationFiles.length,
           lastModified: stats.mtime.toISOString(),
-        });
+        };
+
+        // Validate with Zod
+        const validated = ProjectInfoSchema.parse(project);
+        projects.push(validated);
       } catch (err) {
         // Skip projects we can't read
         console.error(`Error reading project ${entry.name}:`, err);
@@ -58,7 +61,9 @@ projectsRouter.get('/', async (req, res) => {
       new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
     );
 
-    res.json({ projects });
+    // Validate response
+    const response = ProjectsResponseSchema.parse({ projects });
+    res.json(response);
   } catch (err) {
     console.error('Error listing projects:', err);
     res.status(500).json({ error: 'Failed to list projects' });
@@ -66,18 +71,18 @@ projectsRouter.get('/', async (req, res) => {
 });
 
 // POST /api/projects/:projectId/continue - Open Claude CLI to continue conversation
-// NOTE: This route MUST come before /:projectId to avoid being matched as projectId="continue"
 projectsRouter.post('/:projectId/continue', async (req, res) => {
   try {
     const { projectId } = req.params;
-    const { conversationId } = req.body;
+
+    // Validate request body
+    const body = ContinueRequestSchema.parse(req.body);
+    const { conversationId } = body;
 
     // Get the actual project path from the project ID
     const projectPath = folderNameToPath(projectId);
 
     // Build the claude command
-    // --resume <sessionId> resumes a specific conversation
-    // --continue resumes the most recent in the directory
     const args = ['--permission-mode', 'bypassPermissions'];
     if (conversationId) {
       args.push('--resume', conversationId);
@@ -89,7 +94,6 @@ projectsRouter.post('/:projectId/continue', async (req, res) => {
     const isWindows = process.platform === 'win32';
 
     if (isWindows) {
-      // On Windows, use full path to cmd.exe and shell: true for reliability
       const cmdPath = process.env.COMSPEC || 'C:\\Windows\\System32\\cmd.exe';
       spawn(cmdPath, ['/c', 'start', 'cmd', '/k', 'claude', ...args], {
         cwd: projectPath,
@@ -98,7 +102,6 @@ projectsRouter.post('/:projectId/continue', async (req, res) => {
         shell: true,
       }).unref();
     } else {
-      // On macOS/Linux, try to open a terminal
       const terminal = process.platform === 'darwin'
         ? ['open', '-a', 'Terminal', projectPath]
         : ['x-terminal-emulator', '-e'];
@@ -110,7 +113,12 @@ projectsRouter.post('/:projectId/continue', async (req, res) => {
       }).unref();
     }
 
-    res.json({ success: true, message: 'Claude CLI opened' });
+    // Validate and send response
+    const response = ContinueResponseSchema.parse({
+      success: true,
+      message: 'Claude CLI opened'
+    });
+    res.json(response);
   } catch (err) {
     console.error('Error opening Claude CLI:', err);
     res.status(500).json({ error: 'Failed to open Claude CLI' });
@@ -118,7 +126,6 @@ projectsRouter.post('/:projectId/continue', async (req, res) => {
 });
 
 // GET /api/projects/:projectId - Get single project info
-// NOTE: This route MUST come after more specific routes like /:projectId/continue
 projectsRouter.get('/:projectId', async (req, res) => {
   try {
     const { projectId } = req.params;
@@ -133,13 +140,17 @@ projectsRouter.get('/:projectId', async (req, res) => {
     const files = await readdir(projectPath);
     const conversationFiles = files.filter(isConversationFile);
 
-    res.json({
+    const project: ProjectInfo = {
       id: projectId,
       name: getProjectDisplayName(projectId),
       path: folderNameToPath(projectId),
       conversationCount: conversationFiles.length,
       lastModified: stats.mtime.toISOString(),
-    });
+    };
+
+    // Validate with Zod
+    const response = ProjectInfoSchema.parse(project);
+    res.json(response);
   } catch (err) {
     console.error('Error getting project:', err);
     res.status(404).json({ error: 'Project not found' });
