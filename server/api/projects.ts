@@ -90,27 +90,40 @@ projectsRouter.post('/:projectId/continue', async (req, res) => {
       args.push('--continue');
     }
 
-    // Spawn in a new terminal window
+    // Open in a new terminal window
     const isWindows = process.platform === 'win32';
 
     if (isWindows) {
-      const cmdPath = process.env.COMSPEC || 'C:\\Windows\\System32\\cmd.exe';
-      spawn(cmdPath, ['/c', 'start', 'cmd', '/k', 'claude', ...args], {
-        cwd: projectPath,
-        detached: true,
-        stdio: 'ignore',
-        shell: true,
-      }).unref();
-    } else {
-      const terminal = process.platform === 'darwin'
-        ? ['open', '-a', 'Terminal', projectPath]
-        : ['x-terminal-emulator', '-e'];
+      // Use PowerShell Start-Process to open a new cmd window
+      // This is more reliable than trying to spawn cmd directly
+      const claudeArgs = args.join(' ');
+      const psCommand = `Start-Process cmd -ArgumentList '/k', 'cd /d "${projectPath}" && claude ${claudeArgs}'`;
 
-      spawn(terminal[0], [...terminal.slice(1), 'claude', ...args], {
-        cwd: projectPath,
+      const child = spawn('powershell', ['-Command', psCommand], {
         detached: true,
         stdio: 'ignore',
-      }).unref();
+        windowsHide: true,
+      });
+      child.on('error', (err) => console.error('PowerShell spawn error:', err));
+      child.unref();
+    } else {
+      // macOS/Linux
+      const claudeArgs = args.join(' ');
+      if (process.platform === 'darwin') {
+        const child = spawn('open', ['-a', 'Terminal', projectPath], {
+          detached: true,
+          stdio: 'ignore',
+        });
+        child.on('error', (err) => console.error('Spawn error:', err));
+        child.unref();
+      } else {
+        const child = spawn('x-terminal-emulator', ['-e', `bash -c 'cd "${projectPath}" && claude ${claudeArgs}'`], {
+          detached: true,
+          stdio: 'ignore',
+        });
+        child.on('error', (err) => console.error('Spawn error:', err));
+        child.unref();
+      }
     }
 
     // Validate and send response

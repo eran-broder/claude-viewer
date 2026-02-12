@@ -13,12 +13,15 @@ export function getProjectsDir(): string {
 }
 
 // Convert project folder name to readable path
-// e.g., "C--Users-john-projects-myapp" -> "C:/Users/john/projects/myapp"
+// Claude uses -- for path separators and - within folder names
+// e.g., "C--eran-projects-openops2-claude-viewer" -> "C:/eran/projects/openops2/claude-viewer"
 export function folderNameToPath(folderName: string): string {
-  return folderName
-    .replace(/^([A-Za-z])--/, '$1:/')
-    .replace(/--/g, '/')
-    .replace(/-/g, '/');
+  // First handle drive letter: C-- -> C:/
+  let path = folderName.replace(/^([A-Za-z])--/, '$1:/');
+  // Then replace remaining -- with /
+  path = path.replace(/--/g, '/');
+  // Single dashes are preserved (they're part of folder names)
+  return path;
 }
 
 // Convert path to folder name
