@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { readdir, stat } from 'fs/promises';
 import { join } from 'path';
-import { spawn } from 'child_process';
+import { spawn, exec } from 'child_process';
 import {
   ProjectInfoSchema,
   ProjectsResponseSchema,
@@ -92,38 +92,31 @@ projectsRouter.post('/:projectId/continue', async (req, res) => {
 
     // Open in a new terminal window
     const isWindows = process.platform === 'win32';
+    const claudeArgs = args.join(' ');
 
     if (isWindows) {
-      // Use PowerShell Start-Process to open a new cmd window
-      // This is more reliable than trying to spawn cmd directly
-      const claudeArgs = args.join(' ');
-      const psCommand = `Start-Process cmd -ArgumentList '/k', 'cd /d "${projectPath}" && claude ${claudeArgs}'`;
-
-      const child = spawn('powershell', ['-Command', psCommand], {
+      // Use exec with start command - exec handles shell quoting properly
+      const cmd = `start "Claude CLI" /D "${projectPath}" cmd /k claude ${claudeArgs}`;
+      exec(cmd, (err) => {
+        if (err) console.error('Windows exec error:', err);
+      });
+    } else if (process.platform === 'darwin') {
+      // macOS - use AppleScript for reliable terminal opening
+      const script = `tell application "Terminal" to do script "cd '${projectPath}' && claude ${claudeArgs}"`;
+      const child = spawn('osascript', ['-e', script], {
         detached: true,
         stdio: 'ignore',
-        windowsHide: true,
       });
-      child.on('error', (err) => console.error('PowerShell spawn error:', err));
+      child.on('error', (err) => console.error('macOS spawn error:', err));
       child.unref();
     } else {
-      // macOS/Linux
-      const claudeArgs = args.join(' ');
-      if (process.platform === 'darwin') {
-        const child = spawn('open', ['-a', 'Terminal', projectPath], {
-          detached: true,
-          stdio: 'ignore',
-        });
-        child.on('error', (err) => console.error('Spawn error:', err));
-        child.unref();
-      } else {
-        const child = spawn('x-terminal-emulator', ['-e', `bash -c 'cd "${projectPath}" && claude ${claudeArgs}'`], {
-          detached: true,
-          stdio: 'ignore',
-        });
-        child.on('error', (err) => console.error('Spawn error:', err));
-        child.unref();
-      }
+      // Linux
+      const child = spawn('x-terminal-emulator', ['-e', `bash -c 'cd "${projectPath}" && claude ${claudeArgs}'`], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      child.on('error', (err) => console.error('Linux spawn error:', err));
+      child.unref();
     }
 
     // Validate and send response

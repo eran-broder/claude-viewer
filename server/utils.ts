@@ -1,6 +1,7 @@
 import { homedir } from 'os';
 import { join } from 'path';
 import { readdir, stat, readFile } from 'fs/promises';
+import { existsSync } from 'fs';
 
 // Get the Claude config directory
 export function getClaudeDir(): string {
@@ -13,15 +14,44 @@ export function getProjectsDir(): string {
 }
 
 // Convert project folder name to readable path
-// Claude uses -- for path separators and - within folder names
-// e.g., "C--eran-projects-openops2-claude-viewer" -> "C:/eran/projects/openops2/claude-viewer"
+// Claude encodes paths with - as separator, but folder names can also contain hyphens
+// This function tries to find the actual existing path by testing combinations
 export function folderNameToPath(folderName: string): string {
-  // First handle drive letter: C-- -> C:/
-  let path = folderName.replace(/^([A-Za-z])--/, '$1:/');
-  // Then replace remaining -- with /
-  path = path.replace(/--/g, '/');
-  // Single dashes are preserved (they're part of folder names)
-  return path;
+  // Handle drive letter: C-- -> C:/
+  const withDrive = folderName.replace(/^([A-Za-z])--/, '$1:/');
+
+  // Simple conversion: all dashes to slashes
+  const simplePath = withDrive.replace(/-/g, '/');
+
+  // If simple path exists, use it
+  if (existsSync(simplePath)) {
+    return simplePath;
+  }
+
+  // Otherwise, try to find valid path by merging segments
+  // Split into segments and try combining adjacent ones with hyphens
+  const segments = simplePath.split('/');
+  if (segments.length <= 2) return simplePath; // Just drive and one folder
+
+  // Try merging from the end (folder names with hyphens are usually at the end)
+  return findValidPath(segments) || simplePath;
+}
+
+// Recursively try merging adjacent segments to find a valid path
+function findValidPath(segments: string[], startIdx = 1): string | null {
+  const path = segments.join('/');
+  if (existsSync(path)) return path;
+
+  // Try merging each pair of adjacent segments (after the drive)
+  for (let i = segments.length - 1; i > startIdx; i--) {
+    const merged = [...segments];
+    merged[i - 1] = merged[i - 1] + '-' + merged[i];
+    merged.splice(i, 1);
+    const result = findValidPath(merged, startIdx);
+    if (result) return result;
+  }
+
+  return null;
 }
 
 // Convert path to folder name
